@@ -1,59 +1,80 @@
-mport tkinter as tk
-from tkinter import messagebox, simpledialog
+from tkinter import *
+from tkinter import ttk, messagebox
 from pymongo import MongoClient
+from bson.objectid import ObjectId
 
-# MongoDB setup
-client = MongoClient("mongodb://localhost:27017/")
-db = client.testdb
-collection = db.testcollection
+# MongoDB Connection
+client = MongoClient("mongodb://localhost:27017/")  # Change if using Atlas
+db = client["BasicDB"]
+collection = db["users"]
 
-# Tkinter setup
-root = tk.Tk()
-root.title("MongoDB CRUD with Tkinter")
+# -------- Functions --------
+def add_user():
+    user = {
+        "name": entry_name.get(),
+        "age": entry_age.get(),
+        "email": entry_email.get()
+    }
+    collection.insert_one(user)
+    messagebox.showinfo("Success", "User added!")
+    show_users()
 
-listbox = tk.Listbox(root, width=50)
-listbox.pack(pady=10)
+def show_users():
+    for row in tree.get_children():
+        tree.delete(row)
+    for user in collection.find():
+        tree.insert("", "end", values=(user["_id"], user["name"], user["age"], user["email"]))
 
-def refresh_list():
-    listbox.delete(0, tk.END)
-    for doc in collection.find():
-        listbox.insert(tk.END, f"{doc['_id']} : {doc.get('name','')}")
-
-def add_item():
-    name = simpledialog.askstring("Input", "Enter name:")
-    if name:
-        collection.insert_one({"name": name})
-        refresh_list()
-
-def update_item():
-    selected = listbox.curselection()
+def delete_user():
+    selected = tree.focus()
     if not selected:
-        messagebox.showwarning("Select", "Select an item to update")
         return
-    idx = selected[0]
-    doc_id = list(collection.find())[idx]["_id"]
-    new_name = simpledialog.askstring("Input", "Enter new name:")
-    if new_name:
-        collection.update_one({"_id": doc_id}, {"$set": {"name": new_name}})
-        refresh_list()
+    values = tree.item(selected, "values")
+    collection.delete_one({"_id": ObjectId(values[0])})
+    messagebox.showinfo("Deleted", "User deleted")
+    show_users()
 
-def delete_item():
-    selected = listbox.curselection()
+def update_user():
+    selected = tree.focus()
     if not selected:
-        messagebox.showwarning("Select", "Select an item to delete")
         return
-    idx = selected[0]
-    doc_id = list(collection.find())[idx]["_id"]
-    collection.delete_one({"_id": doc_id})
-    refresh_list()
+    values = tree.item(selected, "values")
+    new_data = {
+        "name": entry_name.get(),
+        "age": entry_age.get(),
+        "email": entry_email.get()
+    }
+    collection.update_one({"_id": ObjectId(values[0])}, {"$set": new_data})
+    messagebox.showinfo("Updated", "User updated")
+    show_users()
 
-btn_frame = tk.Frame(root)
-btn_frame.pack(pady=5)
+# -------- GUI --------
+root = Tk()
+root.title("Basic CRUD App")
+root.geometry("600x400")
 
-tk.Button(btn_frame, text="Add", command=add_item).grid(row=0, column=0, padx=5)
-tk.Button(btn_frame, text="Update", command=update_item).grid(row=0, column=1, padx=5)
-tk.Button(btn_frame, text="Delete", command=delete_item).grid(row=0, column=2, padx=5)
-tk.Button(btn_frame, text="Refresh", command=refresh_list).grid(row=0, column=3, padx=5)
+Label(root, text="Name").grid(row=0, column=0)
+entry_name = Entry(root)
+entry_name.grid(row=0, column=1)
 
-refresh_list()
+Label(root, text="Age").grid(row=1, column=0)
+entry_age = Entry(root)
+entry_age.grid(row=1, column=1)
+
+Label(root, text="Email").grid(row=2, column=0)
+entry_email = Entry(root)
+entry_email.grid(row=2, column=1)
+
+Button(root, text="Add", command=add_user).grid(row=3, column=0)
+Button(root, text="Update", command=update_user).grid(row=3, column=1)
+Button(root, text="Delete", command=delete_user).grid(row=3, column=2)
+
+# Table
+columns = ("ID", "Name", "Age", "Email")
+tree = ttk.Treeview(root, columns=columns, show="headings")
+for col in columns:
+    tree.heading(col, text=col)
+tree.grid(row=4, column=0, columnspan=3)
+
+show_users()
 root.mainloop()
